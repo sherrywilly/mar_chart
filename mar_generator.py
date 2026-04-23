@@ -47,7 +47,6 @@ class MARData:
     patient_address: str      # full address string
     doctor: str               # e.g. "Billy Barber"
     start_date: str           # "DD/MM/YYYY" – first date of the chart period
-    period: str               # free text, e.g. "December 2025"
     patient_id: str           # e.g. "53486"
     room: str                 # e.g. "35"
     org_name: str             # shown at top centre, e.g. "AYP Healthcare"
@@ -83,6 +82,19 @@ def _get_four_weeks(start_date_str: str) -> List[List[date]]:
         [monday + timedelta(weeks=w, days=d) for d in range(7)]
         for w in range(4)
     ]
+
+
+def _format_start_date(date_str: str) -> str:
+    """Return 'Friday 27 December 2025' from a DD/MM/YYYY string."""
+    d = _parse_start_date(date_str)
+    return f"{d.strftime('%A')} {d.day} {d.strftime('%B %Y')}"
+
+
+def _format_period(start_date_str: str) -> str:
+    """Return '27 Dec 2025 \u2013 23 Jan 2026' covering the 4-week grid."""
+    weeks = _get_four_weeks(start_date_str)
+    s, e = weeks[0][0], weeks[3][6]
+    return f"{s.day} {s.strftime('%b %Y')} \u2013 {e.day} {e.strftime('%b %Y')}"
 
 
 # ---------------------------------------------------------------------------
@@ -139,15 +151,14 @@ def generate_pdf(data: MARData) -> bytes:
     weeks = _get_four_weeks(data.start_date)
     all_dates = [d for week in weeks for d in week]   # 28 dates
 
-    # ---- Column widths for the 32-column medication grid ----
+    # ---- Column widths for the 31-column medication grid ----
     # col 0 = medication description, col 1 = round label,
-    # col 2 = hour, col 3 = dose, cols 4-31 = 28 day cells
+    # col 2 = dose, cols 3-30 = 28 day cells
     med_w  = 60 * mm
     rnd_w  = 10.5 * mm
-    hour_w = 11 * mm
-    dose_w = 11 * mm
-    day_w  = max((usable_w - med_w - rnd_w - hour_w - dose_w) / 28, 5.5 * mm)
-    grid_col_w = [med_w, rnd_w, hour_w, dose_w] + [day_w] * 28
+    dose_w = 13 * mm
+    day_w  = max((usable_w - med_w - rnd_w - dose_w) / 28, 5.5 * mm)
+    grid_col_w = [med_w, rnd_w, dose_w] + [day_w] * 28
     total_grid_w = sum(grid_col_w)
 
     # ================================================================
@@ -183,7 +194,7 @@ def generate_pdf(data: MARData) -> bytes:
         slots = (list(meds[:3]) + [None, None, None])[:3]
         N_HDR  = 3          # header rows
         N_ROWS = N_HDR + 3 * 5   # 18 total rows
-        NCOLS  = 32
+        NCOLS  = 31
 
         dg = [[""] * NCOLS for _ in range(N_ROWS)]
         sc = []    # style commands
@@ -202,36 +213,35 @@ def generate_pdf(data: MARData) -> bytes:
         # ---- Header row 0: section labels ----
         dg[0][0]  = p("Medication Details", t7bc)
         dg[0][2]  = p("Commencing",         t7bc)
-        dg[0][4]  = p("Week 1",  t7bc)
-        dg[0][11] = p("Week 2",  t7bc)
-        dg[0][18] = p("Week 3",  t7bc)
-        dg[0][25] = p("Week 4",  t7bc)
+        dg[0][3]  = p("Week 1",  t7bc)
+        dg[0][10] = p("Week 2",  t7bc)
+        dg[0][17] = p("Week 3",  t7bc)
+        dg[0][24] = p("Week 4",  t7bc)
 
         sc += [
             # "Medication Details" spans cols 0-1, rows 0-2
             ("SPAN", (0,  0), (1,  2)),
-            # "Commencing" spans cols 2-3, rows 0-1
-            ("SPAN", (2,  0), (3,  1)),
-            # Week headers: row 0 only
-            ("SPAN", (4,  0), (10, 0)),
-            ("SPAN", (11, 0), (17, 0)),
-            ("SPAN", (18, 0), (24, 0)),
-            ("SPAN", (25, 0), (31, 0)),
+            # "Commencing" spans col 2 only, rows 0-1
+            ("SPAN", (2,  0), (2,  1)),
+            # Week headers: row 0 only (7 cols each starting at col 3)
+            ("SPAN", (3,  0), (9,  0)),
+            ("SPAN", (10, 0), (16, 0)),
+            ("SPAN", (17, 0), (23, 0)),
+            ("SPAN", (24, 0), (30, 0)),
             # Header background & alignment
             ("BACKGROUND", (0, 0), (-1, 2), colors.HexColor("#DDEEFF")),
             ("LINEBELOW",  (0, 2), (-1, 2), 1,  colors.black),
             ("ALIGN",      (0, 0), (-1, 2), "CENTER"),
         ]
 
-        # ---- Header row 1: day-of-month numbers ----
+        # ---- Header row 1: day-of-month numbers (start at col 3) ----
         for i, dt in enumerate(all_dates):
-            dg[1][4 + i] = p(str(dt.day), t6bc)
+            dg[1][3 + i] = p(str(dt.day), t6bc)
 
-        # ---- Header row 2: Hour / Dose labels + day abbreviations ----
-        dg[2][2] = p("Hour", t6b)
-        dg[2][3] = p("Dose", t6b)
+        # ---- Header row 2: Dose label + day abbreviations ----
+        dg[2][2] = p("Dose", t6b)
         for i, dt in enumerate(all_dates):
-            dg[2][4 + i] = p(DAY_ABBRS[dt.weekday()], t5bc)
+            dg[2][3 + i] = p(DAY_ABBRS[dt.weekday()], t5bc)
 
         # ---- Medication slot rows ----
         for slot_idx, med in enumerate(slots):
@@ -263,7 +273,7 @@ def generate_pdf(data: MARData) -> bytes:
             rcvd = base + 4
             dg[rcvd][0] = _make_received_row()
             sc += [
-                ("SPAN",          (0, rcvd), (31, rcvd)),
+                ("SPAN",          (0, rcvd), (30, rcvd)),
                 ("TOPPADDING",    (0, rcvd), (-1, rcvd), 0),
                 ("BOTTOMPADDING", (0, rcvd), (-1, rcvd), 0),
                 ("LEFTPADDING",   (0, rcvd), (-1, rcvd), 0),
@@ -272,7 +282,7 @@ def generate_pdf(data: MARData) -> bytes:
 
         # Round-label column centred; day cells centred
         sc.append(("ALIGN", (1, N_HDR), (1,  -1), "CENTER"))
-        sc.append(("ALIGN", (4, N_HDR), (-1, -1), "CENTER"))
+        sc.append(("ALIGN", (3, N_HDR), (-1, -1), "CENTER"))
 
         tbl = Table(dg, colWidths=grid_col_w, repeatRows=N_HDR)
         tbl.setStyle(TableStyle(sc))
@@ -304,8 +314,8 @@ def generate_pdf(data: MARData) -> bytes:
                 "", "", "",
             ],
             [
-                p(f"Start Date: {data.start_date}", t7b),
-                p(f"Period:  {data.period}", t7b),
+                p(f"Start Date: {_format_start_date(data.start_date)}", t7b),
+                p(f"Period:  {_format_period(data.start_date)}", t7b),
                 p(f"Patient ID.  {data.patient_id}", t7b),
                 p(f"Room: {data.room}", t7b),
             ],
@@ -566,7 +576,8 @@ def generate_word(data: MARData) -> bytes:
         [f"Allergies/Conditions: {data.allergies}", None, None,
          f"Doctor: {data.doctor}"],
         [f"Address: {data.patient_address}", None, None, ""],
-        [f"Start Date: {data.start_date}", f"Period: {data.period}",
+        [f"Start Date: {_format_start_date(data.start_date)}",
+         f"Period: {_format_period(data.start_date)}",
          f"Patient ID. {data.patient_id}", f"Room: {data.room}"],
         [f"Prescribing Organization: {data.prescribing_org}", None, None, None],
     ]
@@ -584,23 +595,22 @@ def generate_word(data: MARData) -> bytes:
     doc.add_paragraph()
 
     # ================================================================
-    # Medication administration grid  (32 cols, 18 rows)
+    # Medication administration grid  (31 cols, 18 rows)
     # ================================================================
     N_HDR  = 3
     N_ROWS = N_HDR + 3 * 5   # 18
-    NCOLS  = 32
+    NCOLS  = 31
 
     med_tbl = doc.add_table(rows=N_ROWS, cols=NCOLS)
     med_tbl.style = "Table Grid"
     med_tbl.alignment = WD_TABLE_ALIGNMENT.LEFT
 
-    # Column widths
+    # Column widths (no Hour column)
     med_w_cm  = 6.0
     rnd_w_cm  = 1.05
-    hour_w_cm = 1.1
-    dose_w_cm = 1.1
-    day_w_cm  = max((usable_cm - med_w_cm - rnd_w_cm - hour_w_cm - dose_w_cm) / 28, 0.55)
-    col_w_list = [med_w_cm, rnd_w_cm, hour_w_cm, dose_w_cm] + [day_w_cm] * 28
+    dose_w_cm = 1.3
+    day_w_cm  = max((usable_cm - med_w_cm - rnd_w_cm - dose_w_cm) / 28, 0.55)
+    col_w_list = [med_w_cm, rnd_w_cm, dose_w_cm] + [day_w_cm] * 28
 
     for c_i, cw in enumerate(col_w_list):
         for r_i in range(N_ROWS):
@@ -613,28 +623,26 @@ def generate_word(data: MARData) -> bytes:
                 bold=True, size=7, align=CENTER)
     _set_bg(med_tbl.cell(0, 0), HEADER_BG)
 
-    # "Commencing" cols 2-3, rows 0-1
-    med_tbl.cell(0, 2).merge(med_tbl.cell(1, 3))
+    # "Commencing" col 2 only, rows 0-1
+    med_tbl.cell(0, 2).merge(med_tbl.cell(1, 2))
     _cell_write(med_tbl.cell(0, 2), "Commencing",
                 bold=True, size=7, align=CENTER)
     _set_bg(med_tbl.cell(0, 2), HEADER_BG)
 
-    # Week headers (row 0, 7 cols each)
+    # Week headers (row 0, 7 cols each, starting at col 3)
     for w_idx, wlabel in enumerate(["Week 1", "Week 2", "Week 3", "Week 4"]):
-        sc = 4 + w_idx * 7
+        sc = 3 + w_idx * 7
         med_tbl.cell(0, sc).merge(med_tbl.cell(0, sc + 6))
         _cell_write(med_tbl.cell(0, sc), wlabel, bold=True, size=7, align=CENTER)
         _set_bg(med_tbl.cell(0, sc), HEADER_BG)
 
-    # Hour / Dose labels (row 2)
-    _cell_write(med_tbl.cell(2, 2), "Hour", bold=True, size=6, align=CENTER)
+    # "Dose" label (row 2, col 2)
+    _cell_write(med_tbl.cell(2, 2), "Dose", bold=True, size=6, align=CENTER)
     _set_bg(med_tbl.cell(2, 2), HEADER_BG)
-    _cell_write(med_tbl.cell(2, 3), "Dose", bold=True, size=6, align=CENTER)
-    _set_bg(med_tbl.cell(2, 3), HEADER_BG)
 
-    # Date numbers (row 1) and day abbreviations (row 2)
+    # Date numbers (row 1) and day abbreviations (row 2) starting at col 3
     for i, dt in enumerate(all_dates):
-        col = 4 + i
+        col = 3 + i
         _cell_write(med_tbl.cell(1, col), str(dt.day), bold=True, size=6, align=CENTER)
         _set_bg(med_tbl.cell(1, col), HEADER_BG)
         _cell_write(med_tbl.cell(2, col), DAY_ABBRS[dt.weekday()],

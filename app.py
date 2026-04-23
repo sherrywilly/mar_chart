@@ -54,7 +54,6 @@ def generate():
         patient_address=form.get("patient_address", "").strip(),
         doctor=form.get("doctor", "").strip(),
         start_date=start_date,
-        period=form.get("period", "").strip(),
         patient_id=form.get("patient_id", "").strip(),
         room=form.get("room", "").strip(),
         org_name=form.get("org_name", "AYP Healthcare").strip(),

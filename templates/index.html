@@ -295,10 +295,6 @@
                  title="The chart will cover 4 complete weeks (Mon–Sun) from this date" required />
         </div>
         <div>
-          <label>Period <span class="opt">(label shown on chart)</span></label>
-          <input type="text" name="period" placeholder="e.g. December 2025 – January 2026" />
-        </div>
-        <div>
           <label>Document No. <span class="opt">(optional)</span></label>
           <input type="text" name="document_no" placeholder="e.g. MAR-001" />
         </div>
@@ -309,8 +305,9 @@
         </div>
       </div>
       <div class="note-box">
-        The grid covers <strong>4 complete weeks (Mon – Sun)</strong> starting from the Monday
-        on or before the Start Date entered above.
+        The grid covers <strong>4 complete weeks (Mon – Sun)</strong> from the Monday on or
+        before the Start Date. The <strong>Period</strong> label on the chart is auto-derived
+        from that date range.
       </div>
     </div>
 
@@ -336,7 +333,9 @@
           </div>
           <div>
             <label>Route</label>
-            <input type="text" name="med_{{ i }}_route" placeholder="e.g. Oral" />
+            <input type="text" name="med_{{ i }}_route"
+                   list="route_options"
+                   placeholder="e.g. Oral" />
           </div>
           <div>
             <label>Start Date</label>
@@ -397,6 +396,26 @@
     </button>
 
   </form>
+
+  <!-- Shared datalist for Route field -->
+  <datalist id="route_options">
+    <option value="Oral">
+    <option value="Sublingual">
+    <option value="Topical">
+    <option value="Transdermal (patch)">
+    <option value="Inhaled">
+    <option value="Intranasal">
+    <option value="IV (intravenous)">
+    <option value="IM (intramuscular)">
+    <option value="SC (subcutaneous)">
+    <option value="PR (rectal)">
+    <option value="PV (vaginal)">
+    <option value="PEG (via PEG tube)">
+    <option value="NG (nasogastric tube)">
+    <option value="Ophthalmic (eye drops)">
+    <option value="Otic (ear drops)">
+    <option value="Buccal">
+  </datalist>
 
   <footer style="margin-top:28px">
     AYP Healthcare MAR Chart Generator — for care and medication management use.
