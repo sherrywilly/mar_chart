@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MAR Chart Generator</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #eef2f7;
+      color: #222;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #2c5f8a;
+      color: #fff;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: 0.5px; }
+    header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
+
+    main {
+      max-width: 1100px;
+      margin: 32px auto;
+      padding: 0 16px 48px;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 12px rgba(44,95,138,0.10);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #2c5f8a;
+      border-bottom: 2px solid #2c5f8a;
+      padding-bottom: 6px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section-title .badge {
+      background: #2c5f8a;
+      color: #fff;
+      border-radius: 20px;
+      padding: 1px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .grid { display: grid; gap: 14px; }
+    .grid-2 { grid-template-columns: 1fr 1fr; }
+    .grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    @media(max-width: 700px) {
+      .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #444;
+      margin-bottom: 4px;
+    }
+    label .req { color: #c0392b; }
+
+    input[type=text], input[type=date], input[type=number], select, textarea {
+      width: 100%;
+      padding: 8px 11px;
+      border: 1px solid #c5d3e0;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      background: #f7fbff;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #2c5f8a;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(44,95,138,0.12);
+    }
+    textarea { resize: vertical; min-height: 54px; }
+
+    /* Rounds checkboxes */
+    .rounds-group {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .rounds-group label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-weight: 500;
+      font-size: 0.82rem;
+      color: #333;
+      cursor: pointer;
+    }
+    .rounds-group input[type=checkbox] {
+      width: 16px;
+      height: 16px;
+      accent-color: #2c5f8a;
+      cursor: pointer;
+    }
+
+    /* Medication card */
+    .med-card {
+      border: 1.5px solid #c5d3e0;
+      border-radius: 8px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      background: #f7fbff;
+      position: relative;
+    }
+    .med-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .med-card-title {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: #2c5f8a;
+    }
+    .med-optional {
+      font-size: 0.75rem;
+      color: #888;
+      font-weight: 400;
+    }
+
+    /* Page tabs */
+    .page-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 2px solid #2c5f8a;
+      margin-bottom: 20px;
+    }
+    .page-tab {
+      padding: 8px 22px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border-radius: 8px 8px 0 0;
+      border: 1.5px solid transparent;
+      background: #eef2f7;
+      color: #555;
+      transition: all 0.15s;
+    }
+    .page-tab.active {
+      background: #2c5f8a;
+      color: #fff;
+      border-color: #2c5f8a;
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Output format */
+    .format-group {
+      display: flex;
+      gap: 18px;
+      margin-top: 6px;
+    }
+    .format-group label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 18px;
+      border: 1.5px solid #c5d3e0;
+      border-radius: 8px;
+      background: #f7fbff;
+      transition: all 0.15s;
+    }
+    .format-group label:has(input:checked) {
+      border-color: #2c5f8a;
+      background: #e8f0f8;
+      color: #2c5f8a;
+    }
+    .format-group input[type=radio] {
+      accent-color: #2c5f8a;
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Submit button */
+    .btn-generate {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #2c5f8a;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 13px 36px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      box-shadow: 0 3px 10px rgba(44,95,138,0.22);
+    }
+    .btn-generate:hover { background: #1d4468; transform: translateY(-1px); }
+    .btn-generate:active { transform: translateY(0); }
+
+    .note-box {
+      background: #fff8e1;
+      border-left: 4px solid #f39c12;
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 0.82rem;
+      color: #7d5a00;
+      margin-top: 12px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #999;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>📋 MAR Chart Generator</h1>
+    <p>Medication Administration Record — fill the form and download as PDF or Word</p>
+  </div>
+</header>
+
+<main>
+  <form method="POST" action="/generate" id="marForm">
+
+    <!-- ===== PATIENT & ORGANISATION ===== -->
+    <div class="card">
+      <div class="section-title">Patient Information</div>
+      <div class="grid grid-3">
+        <div>
+          <label>Patient Full Name <span class="req">*</span></label>
+          <input type="text" name="patient_name" placeholder="e.g. Jane Smith" required />
+        </div>
+        <div>
+          <label>Date of Birth</label>
+          <input type="text" name="patient_dob" placeholder="DD/MM/YYYY" />
+        </div>
+        <div>
+          <label>Patient ID / NHS Number</label>
+          <input type="text" name="patient_id" placeholder="e.g. 943 476 5919" />
+        </div>
+        <div style="grid-column: 1 / -1">
+          <label>Known Allergies / Adverse Drug Reactions</label>
+          <input type="text" name="allergies" placeholder="e.g. Penicillin — rash; No known allergies" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Prescribing Organisation</div>
+      <div class="grid grid-3">
+        <div>
+          <label>Organisation Name <span class="req">*</span></label>
+          <input type="text" name="org_name" placeholder="e.g. Sunrise Care Home" required />
+        </div>
+        <div>
+          <label>Prescriber Name</label>
+          <input type="text" name="prescriber_name" placeholder="e.g. Dr. A. Jones" />
+        </div>
+        <div>
+          <label>Address</label>
+          <input type="text" name="org_address" placeholder="e.g. 12 High St, London, SW1A 1AA" />
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Chart Period</div>
+      <div class="grid grid-2" style="max-width:360px">
+        <div>
+          <label>Month</label>
+          <select name="chart_month">
+            {% for m in range(1, 13) %}
+            <option value="{{ m }}" {% if m == month %}selected{% endif %}>{{ m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Year</label>
+          <input type="number" name="chart_year" value="{{ year }}" min="2000" max="2099" />
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MEDICATIONS ===== -->
+    <div class="card">
+      <div class="section-title">
+        Medications
+        <span class="badge">Front page: 1–3 | Back page: 4–6</span>
+      </div>
+
+      <!-- Page tabs -->
+      <div class="page-tabs">
+        <button type="button" class="page-tab active" onclick="showTab('front', event)">📄 Front (Medications 1–3)</button>
+        <button type="button" class="page-tab" onclick="showTab('back', event)">📄 Back (Medications 4–6)</button>
+      </div>
+
+      <!-- FRONT PAGE MEDICATIONS 1-3 -->
+      <div class="tab-panel active" id="tab-front">
+        {% for i in range(1, 4) %}
+        <div class="med-card">
+          <div class="med-card-header">
+            <span class="med-card-title">Medication {{ i }}{% if i > 1 %} <span class="med-optional">(optional)</span>{% endif %}</span>
+          </div>
+          <div class="grid grid-3">
+            <div>
+              <label>Medication Name{% if i == 1 %} <span class="req">*</span>{% endif %}</label>
+              <input type="text" name="med_{{ i }}_name" placeholder="e.g. Amlodipine 5mg tablets"{% if i == 1 %} required{% endif %} />
+            </div>
+            <div>
+              <label>Dose</label>
+              <input type="text" name="med_{{ i }}_dose" placeholder="e.g. 5mg" />
+            </div>
+            <div>
+              <label>Route</label>
+              <input type="text" name="med_{{ i }}_route" placeholder="e.g. Oral" />
+            </div>
+            <div>
+              <label>Start Date</label>
+              <input type="text" name="med_{{ i }}_start" placeholder="DD/MM/YYYY" />
+            </div>
+            <div>
+              <label>End Date <span class="med-optional">(optional)</span></label>
+              <input type="text" name="med_{{ i }}_end" placeholder="DD/MM/YYYY" />
+            </div>
+            <div>
+              <label>Special Instructions <span class="med-optional">(optional)</span></label>
+              <input type="text" name="med_{{ i }}_instructions" placeholder="e.g. With food" />
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <label>Administration Round(s)</label>
+            <div class="rounds-group">
+              {% for rnd in ['Morning', 'Noon', 'Evening', 'Bedtime'] %}
+              <label>
+                <input type="checkbox" name="med_{{ i }}_rounds" value="{{ rnd }}" />
+                {{ rnd }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- BACK PAGE MEDICATIONS 4-6 -->
+      <div class="tab-panel" id="tab-back">
+        <div class="note-box">
+          Medications 4–6 will be printed on the <strong>back page</strong> of the MAR chart.
+          Leave blank if not needed.
+        </div>
+        <div style="margin-top:16px"></div>
+        {% for i in range(4, 7) %}
+        <div class="med-card">
+          <div class="med-card-header">
+            <span class="med-card-title">Medication {{ i }} <span class="med-optional">(optional — back page)</span></span>
+          </div>
+          <div class="grid grid-3">
+            <div>
+              <label>Medication Name</label>
+              <input type="text" name="med_{{ i }}_name" placeholder="e.g. Metformin 500mg tablets" />
+            </div>
+            <div>
+              <label>Dose</label>
+              <input type="text" name="med_{{ i }}_dose" placeholder="e.g. 500mg" />
+            </div>
+            <div>
+              <label>Route</label>
+              <input type="text" name="med_{{ i }}_route" placeholder="e.g. Oral" />
+            </div>
+            <div>
+              <label>Start Date</label>
+              <input type="text" name="med_{{ i }}_start" placeholder="DD/MM/YYYY" />
+            </div>
+            <div>
+              <label>End Date <span class="med-optional">(optional)</span></label>
+              <input type="text" name="med_{{ i }}_end" placeholder="DD/MM/YYYY" />
+            </div>
+            <div>
+              <label>Special Instructions <span class="med-optional">(optional)</span></label>
+              <input type="text" name="med_{{ i }}_instructions" placeholder="e.g. With meals" />
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <label>Administration Round(s)</label>
+            <div class="rounds-group">
+              {% for rnd in ['Morning', 'Noon', 'Evening', 'Bedtime'] %}
+              <label>
+                <input type="checkbox" name="med_{{ i }}_rounds" value="{{ rnd }}" />
+                {{ rnd }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ===== OUTPUT FORMAT ===== -->
+    <div class="card">
+      <div class="section-title">Output Format</div>
+      <div class="format-group">
+        <label>
+          <input type="radio" name="output_format" value="pdf" checked />
+          📄 PDF
+        </label>
+        <label>
+          <input type="radio" name="output_format" value="word" />
+          📝 Word (.docx)
+        </label>
+      </div>
+      <div class="note-box" style="margin-top:14px">
+        The generated file will be downloaded automatically. Each page fits a maximum of
+        <strong>3 medications</strong> with a day-by-day administration grid for the whole month.
+      </div>
+    </div>
+
+    <button type="submit" class="btn-generate">
+      ⬇️ Generate &amp; Download MAR Chart
+    </button>
+
+  </form>
+
+  <footer style="margin-top:28px">
+    MAR Chart Generator — for care and medication management use.
+  </footer>
+</main>
+
+<script>
+  function showTab(name, event) {
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    event.target.classList.add('active');
+  }
+</script>
+
+</body>
+</html>
