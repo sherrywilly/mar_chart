@@ -3,13 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <title>AYP Healthcare – MAR Chart Generator</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: 'Segoe UI', Arial, sans-serif;
-      background: #eef2f7;
+      font-family: 'Manrope', 'Segoe UI', Arial, sans-serif;
+      background:
+        radial-gradient(circle at 10% 10%, rgba(120, 164, 195, 0.22), transparent 42%),
+        radial-gradient(circle at 90% 90%, rgba(44, 95, 138, 0.16), transparent 38%),
+        #eef2f7;
       color: #222;
       min-height: 100vh;
     }
@@ -27,9 +33,10 @@
     header p  { font-size: 0.85rem; opacity: 0.85; margin-top: 2px; }
 
     main {
-      max-width: 1100px;
-      margin: 32px auto;
-      padding: 0 16px 48px;
+      width: 100%;
+      max-width: 100%;
+      margin: 24px 0;
+      padding: 0 24px 48px;
     }
 
     .card {
@@ -38,6 +45,7 @@
       box-shadow: 0 2px 12px rgba(44,95,138,0.10);
       padding: 28px 32px;
       margin-bottom: 24px;
+      width: 100%;
     }
 
     .section-title {
@@ -56,6 +64,8 @@
 
     @media(max-width: 700px) {
       .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      main { padding: 0 12px 32px; }
+      .card { padding: 20px 16px; }
     }
 
     label {
@@ -247,7 +257,7 @@
         </div>
         <div>
           <label>Date of Birth</label>
-          <input type="text" name="patient_dob" placeholder="DD/MM/YYYY" />
+          <input type="date" name="patient_dob" />
         </div>
         <div>
           <label>Gender</label>
@@ -290,8 +300,7 @@
       <div class="grid grid-3">
         <div>
           <label>Start Date <span class="req">*</span></label>
-          <input type="text" name="start_date" value="{{ default_start }}"
-                 placeholder="DD/MM/YYYY"
+          <input type="date" name="start_date" value="{{ default_start }}"
                  title="The chart will cover 4 complete weeks (Mon–Sun) from this date" required />
         </div>
         <div>
@@ -305,9 +314,8 @@
         </div>
       </div>
       <div class="note-box">
-        The grid covers <strong>4 complete weeks (Mon – Sun)</strong> from the Monday on or
-        before the Start Date. The <strong>Period</strong> label on the chart is auto-derived
-        from that date range.
+        The grid covers <strong>4 weeks (28 days)</strong> starting from your selected Start Date,
+        including when the start day is Thursday, Friday, or Saturday.
       </div>
     </div>
 
@@ -338,12 +346,8 @@
                    placeholder="e.g. Oral" />
           </div>
           <div>
-            <label>Start Date</label>
-            <input type="text" name="med_{{ i }}_start" placeholder="DD/MM/YYYY" />
-          </div>
-          <div>
             <label>End Date <span class="opt">(optional)</span></label>
-            <input type="text" name="med_{{ i }}_end" placeholder="DD/MM/YYYY" />
+            <input type="date" name="med_{{ i }}_end" />
           </div>
           <div>
             <label>Container / Storage <span class="opt">(optional)</span></label>
@@ -359,7 +363,7 @@
         <div style="margin-top:14px">
           <label>Administration Rounds</label>
           <div class="rounds-group">
-            {% for rnd in ['MORNI', 'LUNCH', 'TEA', 'NIGHT'] %}
+            {% for rnd in ['EARLY', 'MORNI', 'LUNCH', 'TEA', 'NIGHT'] %}
             <label>
               <input type="checkbox" name="med_{{ i }}_rounds" value="{{ rnd }}" checked />
               {{ rnd }}

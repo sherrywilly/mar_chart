@@ -2,7 +2,7 @@
 MAR Chart Generator – AYP Healthcare format
 
 Front page : Medication Administration Record Sheet
-             Weekly grid (4 weeks × 7 days), MORNI/LUNCH/TEA/NIGHT rounds,
+             Weekly grid (4 weeks × 7 days), EARLY/MORNI/LUNCH/TEA/NIGHT rounds,
              up to 3 medications per page.
 Back page  : Carers Medication Notes table
 """
@@ -17,7 +17,7 @@ from typing import List
 # Constants
 # ---------------------------------------------------------------------------
 
-ROUNDS = ["MORNI", "LUNCH", "TEA", "NIGHT"]
+ROUNDS = ["EARLY", "MORNI", "LUNCH", "TEA", "NIGHT"]
 DAY_ABBRS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -30,7 +30,6 @@ class Medication:
     name: str
     dose: str
     route: str
-    start_date: str
     end_date: str = ""
     rounds: List[str] = field(default_factory=lambda: list(ROUNDS))
     instructions: str = ""
@@ -75,11 +74,10 @@ def _parse_start_date(date_str: str) -> date:
 
 
 def _get_four_weeks(start_date_str: str) -> List[List[date]]:
-    """Return 4 Mon–Sun weeks starting from the Monday on/before start_date."""
+    """Return 4 weeks (28 days) starting from the selected start date."""
     start = _parse_start_date(start_date_str)
-    monday = start - timedelta(days=start.weekday())
     return [
-        [monday + timedelta(weeks=w, days=d) for d in range(7)]
+        [start + timedelta(weeks=w, days=d) for d in range(7)]
         for w in range(4)
     ]
 
@@ -91,7 +89,7 @@ def _format_start_date(date_str: str) -> str:
 
 
 def _format_period(start_date_str: str) -> str:
-    """Return '27 Dec 2025 \u2013 23 Jan 2026' covering the 4-week grid."""
+    """Return date span for the 4-week grid from the selected start date."""
     weeks = _get_four_weeks(start_date_str)
     s, e = weeks[0][0], weeks[3][6]
     return f"{s.day} {s.strftime('%b %Y')} \u2013 {e.day} {e.strftime('%b %Y')}"
@@ -137,11 +135,11 @@ def generate_pdf(data: MARData) -> bytes:
         return Paragraph(str(text), style or sty("t7"))
 
     # Pre-build commonly used styles
-    t5bc = sty("t5bc", 5.5, bold=True, align=1)
-    t6   = sty("t6",   6)
+    t5bc = sty("t5bc", 6, bold=True, align=1)
+    t6   = sty("t6",   6.2, bold=True)
     t6b  = sty("t6b",  6,  bold=True)
     t6bc = sty("t6bc", 6,  bold=True, align=1)
-    t7   = sty("t7",   7)
+    t7   = sty("t7",   7,  bold=True)
     t7b  = sty("t7b",  7,  bold=True)
     t7bc = sty("t7bc", 7,  bold=True, align=1)
     t9b  = sty("t9b",  9,  bold=True)
@@ -192,8 +190,9 @@ def generate_pdf(data: MARData) -> bytes:
     # ================================================================
     def _build_med_grid(meds: list) -> Table:
         slots = (list(meds[:3]) + [None, None, None])[:3]
-        N_HDR  = 3          # header rows
-        N_ROWS = N_HDR + 3 * 5   # 18 total rows
+        N_HDR = 3
+        slot_rows = len(ROUNDS) + 2
+        N_ROWS = N_HDR + 3 * slot_rows
         NCOLS  = 31
 
         dg = [[""] * NCOLS for _ in range(N_ROWS)]
@@ -212,17 +211,17 @@ def generate_pdf(data: MARData) -> bytes:
 
         # ---- Header row 0: section labels ----
         dg[0][0]  = p("Medication Details", t7bc)
-        dg[0][2]  = p("Commencing",         t7bc)
+        dg[0][1]  = p("Commencing",         t7bc)
         dg[0][3]  = p("Week 1",  t7bc)
         dg[0][10] = p("Week 2",  t7bc)
         dg[0][17] = p("Week 3",  t7bc)
         dg[0][24] = p("Week 4",  t7bc)
 
         sc += [
-            # "Medication Details" spans cols 0-1, rows 0-2
-            ("SPAN", (0,  0), (1,  2)),
-            # "Commencing" spans col 2 only, rows 0-1
-            ("SPAN", (2,  0), (2,  1)),
+            # "Medication Details" spans col 0, rows 0-2
+            ("SPAN", (0,  0), (0,  2)),
+            # "Commencing" spans cols 1-2, rows 0-1
+            ("SPAN", (1,  0), (2,  1)),
             # Week headers: row 0 only (7 cols each starting at col 3)
             ("SPAN", (3,  0), (9,  0)),
             ("SPAN", (10, 0), (16, 0)),
@@ -235,17 +234,19 @@ def generate_pdf(data: MARData) -> bytes:
         ]
 
         # ---- Header row 1: day-of-month numbers (start at col 3) ----
+        dg[1][1] = p("Date", t6bc)
         for i, dt in enumerate(all_dates):
             dg[1][3 + i] = p(str(dt.day), t6bc)
 
-        # ---- Header row 2: Dose label + day abbreviations ----
+        # ---- Header row 2: Hour/Dose + day abbreviations ----
+        dg[2][1] = p("Hour", t6b)
         dg[2][2] = p("Dose", t6b)
         for i, dt in enumerate(all_dates):
             dg[2][3 + i] = p(DAY_ABBRS[dt.weekday()], t5bc)
 
         # ---- Medication slot rows ----
         for slot_idx, med in enumerate(slots):
-            base = N_HDR + slot_idx * 5   # first row of this slot
+            base = N_HDR + slot_idx * slot_rows
 
             # Medication description cell (col 0) spans all 4 round rows
             if med is not None:
@@ -253,24 +254,31 @@ def generate_pdf(data: MARData) -> bytes:
                 if med.instructions:
                     txt += f"<br/><font size='5.5'>{med.instructions}</font>"
                 if med.container:
-                    txt += f"<br/><font size='5.5'><b>{med.container}</b></font>"
+                    txt += f"<br/><font size='5.5'><u><b>{med.container}</b></u></font>"
                 dg[base][0] = p(txt, t6)
 
             sc += [
-                ("SPAN",       (0, base), (0, base + 3)),
-                ("VALIGN",     (0, base), (0, base + 3), "TOP"),
+                ("SPAN",       (0, base), (0, base + len(ROUNDS) - 1)),
+                ("VALIGN",     (0, base), (0, base + len(ROUNDS) - 1), "TOP"),
                 ("TOPPADDING", (0, base), (0, base),     3),
             ]
+
+            if med is not None and med.dose:
+                dg[base][2] = p(med.dose, t6bc)
+                sc += [
+                    ("SPAN", (2, base), (2, base + len(ROUNDS) - 1)),
+                    ("VALIGN", (2, base), (2, base + len(ROUNDS) - 1), "MIDDLE"),
+                ]
 
             # Round label column
             for r_idx, rnd in enumerate(ROUNDS):
                 dg[base + r_idx][1] = p(rnd, t6bc)
 
-            # Thick line below the 4 round rows
-            sc.append(("LINEBELOW", (0, base + 3), (-1, base + 3), 0.75, colors.black))
+            # Thick line below round rows
+            sc.append(("LINEBELOW", (0, base + len(ROUNDS) - 1), (-1, base + len(ROUNDS) - 1), 0.75, colors.black))
 
-            # Received / Returned / Destroyed row (spans full width)
-            rcvd = base + 4
+            # Extra blank row after rounds, then Received / Returned / Destroyed row
+            rcvd = base + len(ROUNDS) + 1
             dg[rcvd][0] = _make_received_row()
             sc += [
                 ("SPAN",          (0, rcvd), (30, rcvd)),
@@ -282,9 +290,15 @@ def generate_pdf(data: MARData) -> bytes:
 
         # Round-label column centred; day cells centred
         sc.append(("ALIGN", (1, N_HDR), (1,  -1), "CENTER"))
+        sc.append(("ALIGN", (2, N_HDR), (2,  -1), "CENTER"))
         sc.append(("ALIGN", (3, N_HDR), (-1, -1), "CENTER"))
 
-        tbl = Table(dg, colWidths=grid_col_w, repeatRows=N_HDR)
+        # Keep rows compact enough to avoid front-page overflow with 5 rounds.
+        row_heights = [5.2 * mm, 4.6 * mm, 4.6 * mm]
+        for _ in range(3):
+            row_heights.extend(([5.1 * mm] * len(ROUNDS)) + [3.8 * mm, 4.3 * mm])
+
+        tbl = Table(dg, colWidths=grid_col_w, rowHeights=row_heights, repeatRows=N_HDR)
         tbl.setStyle(TableStyle(sc))
         return tbl
 
@@ -466,7 +480,7 @@ def generate_pdf(data: MARData) -> bytes:
 
 def generate_word(data: MARData) -> bytes:
     from docx import Document
-    from docx.enum.table import WD_ALIGN_VERTICAL, WD_TABLE_ALIGNMENT
+    from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE, WD_TABLE_ALIGNMENT
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
@@ -595,10 +609,11 @@ def generate_word(data: MARData) -> bytes:
     doc.add_paragraph()
 
     # ================================================================
-    # Medication administration grid  (31 cols, 18 rows)
+    # Medication administration grid  (31 cols, dynamic round rows)
     # ================================================================
     N_HDR  = 3
-    N_ROWS = N_HDR + 3 * 5   # 18
+    slot_rows = len(ROUNDS) + 2
+    N_ROWS = N_HDR + 3 * slot_rows
     NCOLS  = 31
 
     med_tbl = doc.add_table(rows=N_ROWS, cols=NCOLS)
@@ -616,18 +631,46 @@ def generate_word(data: MARData) -> bytes:
         for r_i in range(N_ROWS):
             med_tbl.rows[r_i].cells[c_i].width = Cm(cw)
 
+    # Keep rows compact enough to avoid front-page overflow with 5 rounds.
+    med_tbl.rows[0].height = Cm(0.52)
+    med_tbl.rows[1].height = Cm(0.46)
+    med_tbl.rows[2].height = Cm(0.46)
+    med_tbl.rows[0].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    med_tbl.rows[1].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    med_tbl.rows[2].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+    for i in range(3, N_ROWS):
+        slot_pos = (i - N_HDR) % slot_rows
+        if slot_pos == len(ROUNDS):
+            med_tbl.rows[i].height = Cm(0.38)
+        elif slot_pos == len(ROUNDS) + 1:
+            med_tbl.rows[i].height = Cm(0.43)
+        else:
+            med_tbl.rows[i].height = Cm(0.51)
+        med_tbl.rows[i].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+
     # ---- Header spans ----
-    # "Medication Details" cols 0-1, rows 0-2
-    med_tbl.cell(0, 0).merge(med_tbl.cell(2, 1))
+    # "Medication Details" col 0, rows 0-2
+    med_tbl.cell(0, 0).merge(med_tbl.cell(2, 0))
     _cell_write(med_tbl.cell(0, 0), "Medication Details",
                 bold=True, size=7, align=CENTER)
     _set_bg(med_tbl.cell(0, 0), HEADER_BG)
 
-    # "Commencing" col 2 only, rows 0-1
-    med_tbl.cell(0, 2).merge(med_tbl.cell(1, 2))
-    _cell_write(med_tbl.cell(0, 2), "Commencing",
+    # "Commencing" cols 1-2, rows 0-1
+    med_tbl.cell(0, 1).merge(med_tbl.cell(1, 2))
+    _cell_write(med_tbl.cell(0, 1), "Commencing",
                 bold=True, size=7, align=CENTER)
-    _set_bg(med_tbl.cell(0, 2), HEADER_BG)
+    _set_bg(med_tbl.cell(0, 1), HEADER_BG)
+
+    # Date/Hour/Dose labels
+    _cell_write(med_tbl.cell(1, 1), "Date", bold=True, size=6, align=CENTER)
+    _set_bg(med_tbl.cell(1, 1), HEADER_BG)
+    _cell_write(med_tbl.cell(2, 1), "Hour", bold=True, size=6, align=CENTER)
+    _set_bg(med_tbl.cell(2, 1), HEADER_BG)
+    _cell_write(med_tbl.cell(2, 2), "Dose", bold=True, size=6, align=CENTER)
+    _set_bg(med_tbl.cell(2, 2), HEADER_BG)
+
+    # Keep row-2 col-2 for dose only and clear row-1 col-2
+    _cell_write(med_tbl.cell(1, 2), "", bold=False, size=6, align=CENTER)
 
     # Week headers (row 0, 7 cols each, starting at col 3)
     for w_idx, wlabel in enumerate(["Week 1", "Week 2", "Week 3", "Week 4"]):
@@ -635,10 +678,6 @@ def generate_word(data: MARData) -> bytes:
         med_tbl.cell(0, sc).merge(med_tbl.cell(0, sc + 6))
         _cell_write(med_tbl.cell(0, sc), wlabel, bold=True, size=7, align=CENTER)
         _set_bg(med_tbl.cell(0, sc), HEADER_BG)
-
-    # "Dose" label (row 2, col 2)
-    _cell_write(med_tbl.cell(2, 2), "Dose", bold=True, size=6, align=CENTER)
-    _set_bg(med_tbl.cell(2, 2), HEADER_BG)
 
     # Date numbers (row 1) and day abbreviations (row 2) starting at col 3
     for i, dt in enumerate(all_dates):
@@ -652,32 +691,51 @@ def generate_word(data: MARData) -> bytes:
     # ---- Medication slots ----
     slots = (list(data.medications[:3]) + [None, None, None])[:3]
     for slot_idx, med in enumerate(slots):
-        base = N_HDR + slot_idx * 5
+        base = N_HDR + slot_idx * slot_rows
 
-        # Medication description spans rows base..base+3 in col 0
-        med_tbl.cell(base, 0).merge(med_tbl.cell(base + 3, 0))
+        # Medication description spans rows base..base+len(ROUNDS)-1 in col 0
+        med_tbl.cell(base, 0).merge(med_tbl.cell(base + len(ROUNDS) - 1, 0))
         if med is not None:
-            txt = med.name
+            cell = med_tbl.cell(base, 0)
+            cell.text = ""
+            para = cell.paragraphs[0]
+            name_run = para.add_run(med.name)
+            name_run.bold = True
+            name_run.font.size = Pt(7)
+
             if med.instructions:
-                txt += f"\n{med.instructions}"
+                para.add_run("\n")
+                inst_run = para.add_run(med.instructions)
+                inst_run.font.size = Pt(6)
+
             if med.container:
-                txt += f"\n{med.container}"
-            _cell_write(med_tbl.cell(base, 0), txt, bold=True, size=7)
+                para.add_run("\n")
+                container_run = para.add_run(med.container)
+                container_run.bold = True
+                container_run.underline = True
+                container_run.font.size = Pt(6)
+
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+
+        if med is not None and med.dose:
+            med_tbl.cell(base, 2).merge(med_tbl.cell(base + len(ROUNDS) - 1, 2))
+            _cell_write(med_tbl.cell(base, 2), med.dose,
+                        bold=True, size=6, align=CENTER)
 
         # Round labels
         for r_idx, rnd in enumerate(ROUNDS):
             _cell_write(med_tbl.cell(base + r_idx, 1), rnd,
                         bold=True, size=6, align=CENTER)
 
-        # Received / Returned / Destroyed row (merge all cols)
-        rcvd = base + 4
+        # Extra blank row after rounds, then Received / Returned / Destroyed row
+        rcvd = base + len(ROUNDS) + 1
         med_tbl.cell(rcvd, 0).merge(med_tbl.cell(rcvd, NCOLS - 1))
         rcvd_txt = (
             "Received:              Qty:                    "
             "Returned:              Qty:          By:                    "
             "Destroyed:              Qty:          By:"
         )
-        _cell_write(med_tbl.cell(rcvd, 0), rcvd_txt, bold=False, size=6)
+        _cell_write(med_tbl.cell(rcvd, 0), rcvd_txt, bold=True, size=6)
 
     doc.add_page_break()
 

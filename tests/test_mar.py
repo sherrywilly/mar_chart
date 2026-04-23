@@ -31,7 +31,6 @@ SAMPLE_MED = Medication(
     name="Paracetamol 500mg tab",
     dose="500mg",
     route="Oral",
-    start_date="27/12/2025",
     end_date="",
     rounds=list(ROUNDS),
     instructions="Two to be taken when required",
@@ -64,7 +63,7 @@ def test_generate_pdf_three_medications():
     meds = [
         Medication(
             name=f"Med {i}", dose="5mg", route="Oral",
-            start_date="27/12/2025", rounds=list(ROUNDS),
+            rounds=list(ROUNDS),
         )
         for i in range(1, 4)
     ]

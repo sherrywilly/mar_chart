@@ -13,10 +13,30 @@ from mar_generator import MARData, Medication, generate_pdf, generate_word, ROUN
 app = Flask(__name__)
 
 
+def _date_to_dmy(raw: str) -> str:
+    """Accept YYYY-MM-DD or DD/MM/YYYY and return DD/MM/YYYY."""
+    value = (raw or "").strip()
+    if not value:
+        return ""
+    if "-" in value:
+        try:
+            y, m, d = value.split("-")
+            return date(int(y), int(m), int(d)).strftime("%d/%m/%Y")
+        except (ValueError, TypeError):
+            return ""
+    if "/" in value:
+        try:
+            d, m, y = value.split("/")
+            return date(int(y), int(m), int(d)).strftime("%d/%m/%Y")
+        except (ValueError, TypeError):
+            return ""
+    return ""
+
+
 @app.route("/", methods=["GET"])
 def index():
     today = date.today()
-    default_start = today.strftime("%d/%m/%Y")
+    default_start = today.strftime("%Y-%m-%d")
     return render_template("index.html", default_start=default_start)
 
 
@@ -35,7 +55,6 @@ def generate():
             name=name,
             dose=form.get(f"med_{i}_dose", "").strip(),
             route=form.get(f"med_{i}_route", "").strip(),
-            start_date=form.get(f"med_{i}_start", "").strip(),
             end_date=form.get(f"med_{i}_end", "").strip(),
             rounds=rounds if rounds else list(ROUNDS),
             instructions=form.get(f"med_{i}_instructions", "").strip(),
@@ -43,11 +62,12 @@ def generate():
         )
         medications.append(med)
 
-    start_date = form.get("start_date", "").strip() or date.today().strftime("%d/%m/%Y")
+    start_date = _date_to_dmy(form.get("start_date", "")) or date.today().strftime("%d/%m/%Y")
+    patient_dob = _date_to_dmy(form.get("patient_dob", "")) or form.get("patient_dob", "").strip()
 
     mar_data = MARData(
         patient_name=form.get("patient_name", "").strip(),
-        patient_dob=form.get("patient_dob", "").strip(),
+        patient_dob=patient_dob,
         nhs_number=form.get("nhs_number", "").strip(),
         allergies=form.get("allergies", "").strip(),
         gender=form.get("gender", "").strip(),
