@@ -4,12 +4,11 @@ Run with: python app.py
 """
 from __future__ import annotations
 
-import calendar
 from datetime import date
 
 from flask import Flask, Response, render_template, request
 
-from mar_generator import MARData, Medication, generate_pdf, generate_word
+from mar_generator import MARData, Medication, generate_pdf, generate_word, ROUNDS
 
 app = Flask(__name__)
 
@@ -17,16 +16,17 @@ app = Flask(__name__)
 @app.route("/", methods=["GET"])
 def index():
     today = date.today()
-    return render_template("index.html", month=today.month, year=today.year)
+    default_start = today.strftime("%d/%m/%Y")
+    return render_template("index.html", default_start=default_start)
 
 
 @app.route("/generate", methods=["POST"])
 def generate():
     form = request.form
 
-    # Collect medications (up to 6 — 3 per page side)
+    # Collect medications (up to 3 — all shown on the front page)
     medications = []
-    for i in range(1, 7):
+    for i in range(1, 4):
         name = form.get(f"med_{i}_name", "").strip()
         if not name:
             continue
@@ -37,37 +37,42 @@ def generate():
             route=form.get(f"med_{i}_route", "").strip(),
             start_date=form.get(f"med_{i}_start", "").strip(),
             end_date=form.get(f"med_{i}_end", "").strip(),
-            rounds=rounds,
+            rounds=rounds if rounds else list(ROUNDS),
             instructions=form.get(f"med_{i}_instructions", "").strip(),
+            container=form.get(f"med_{i}_container", "").strip(),
         )
         medications.append(med)
 
-    try:
-        chart_month = int(form.get("chart_month", date.today().month))
-        chart_year = int(form.get("chart_year", date.today().year))
-    except ValueError:
-        chart_month = date.today().month
-        chart_year = date.today().year
+    start_date = form.get("start_date", "").strip() or date.today().strftime("%d/%m/%Y")
 
     mar_data = MARData(
         patient_name=form.get("patient_name", "").strip(),
         patient_dob=form.get("patient_dob", "").strip(),
-        patient_id=form.get("patient_id", "").strip(),
+        nhs_number=form.get("nhs_number", "").strip(),
         allergies=form.get("allergies", "").strip(),
-        org_name=form.get("org_name", "").strip(),
+        gender=form.get("gender", "").strip(),
+        patient_address=form.get("patient_address", "").strip(),
+        doctor=form.get("doctor", "").strip(),
+        start_date=start_date,
+        period=form.get("period", "").strip(),
+        patient_id=form.get("patient_id", "").strip(),
+        room=form.get("room", "").strip(),
+        org_name=form.get("org_name", "AYP Healthcare").strip(),
         org_address=form.get("org_address", "").strip(),
-        prescriber_name=form.get("prescriber_name", "").strip(),
-        chart_month=chart_month,
-        chart_year=chart_year,
+        prescribing_org=form.get("prescribing_org", "").strip(),
+        document_no=form.get("document_no", "").strip(),
+        pharmacy_no=form.get("pharmacy_no", "").strip(),
+        phone=form.get("phone", "").strip(),
         medications=medications,
     )
 
     output_format = form.get("output_format", "pdf")
+    safe_name = mar_data.patient_name.replace(" ", "_") or "Patient"
+    safe_date = start_date.replace("/", "-")
 
     if output_format == "word":
         content = generate_word(mar_data)
-        month_str = calendar.month_abbr[chart_month]
-        filename = f"MAR_Chart_{mar_data.patient_name.replace(' ', '_')}_{month_str}{chart_year}.docx"
+        filename = f"MAR_Chart_{safe_name}_{safe_date}.docx"
         return Response(
             content,
             mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -75,8 +80,7 @@ def generate():
         )
     else:
         content = generate_pdf(mar_data)
-        month_str = calendar.month_abbr[chart_month]
-        filename = f"MAR_Chart_{mar_data.patient_name.replace(' ', '_')}_{month_str}{chart_year}.pdf"
+        filename = f"MAR_Chart_{safe_name}_{safe_date}.pdf"
         return Response(
             content,
             mimetype="application/pdf",
