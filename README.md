@@ -8,14 +8,15 @@ A web-based **Medication Administration Record (MAR) chart** generator. Fill in 
 
 ## Features
 
-- **Patient information**: name, date of birth, patient ID / NHS number, allergies
-- **Prescribing organisation**: organisation name, prescriber name, address
-- **Chart period**: choose any month and year
-- **Up to 6 medications** (3 per page side):
-  - Medication name, dose, route, start/end date, special instructions
-  - Administration rounds: Morning, Noon, Evening, Bedtime
-  - Day-by-day administration grid for the whole month
-- **Front page** (medications 1–3) and **Back page** (medications 4–6)
+- **AYP Healthcare branding**: organisation name, address, pharmacy number shown in header
+- **Patient information**: name, NHS number, date of birth, gender, allergies/conditions, address, doctor, patient ID, room
+- **Chart period**: enter a start date — the chart automatically covers the **4 complete Mon–Sun weeks** from that date
+- **Up to 3 medications** on the front page:
+  - Medication name, dose, route, start/end date, special instructions, container/storage note
+  - Administration rounds: **MORNI, LUNCH, TEA, NIGHT**
+  - Weekly grid (4 weeks × 7 days) with Received / Returned / Destroyed tracking row per medication
+- **Front page**: medication administration grid
+- **Back page**: **Carers Medication Notes** log table (DATE / TIME / INITIALS / MEDICATION / DOSE / REASON / RESULT / TIME / INITIALS)
 - **Output formats**: PDF (landscape A4) or Word (.docx, landscape A4)
 
 ---
@@ -53,15 +54,22 @@ mar_chart/
 
 ## MAR Chart Layout
 
-Each page of the generated document contains:
+### Front page
 
 | Section | Contents |
 |---|---|
-| Header | Title with month/year and page label |
-| Patient info | Name, DOB, Patient ID, Allergies |
-| Organisation info | Organisation name, prescriber, address |
-| Medication grid | Medication details + day-by-day administration columns |
-| Key | Symbol legend (✓ Administered, X Not given, R Refused, H Hospital, S Self-administered) |
+| Header | AYP Healthcare (org name), address, pharmacy number; Medication Administration / Record Sheet title; Document No. |
+| Patient info | Name, NHS Number, DOB, Gender, Allergies/Conditions, Doctor, Address, Start Date, Period, Patient ID, Room, Prescribing Organisation |
+| Medication grid | Up to 3 medications — weekly grid (4 weeks × 7 days), MORNI / LUNCH / TEA / NIGHT rounds, Received / Returned / Destroyed row |
+| Legend | R – Refused, B – Nausea or Vomiting, C – Hospitalized, D – Social Leave, E – Refused & Destroyed, F – Other |
+
+### Back page
+
+| Section | Contents |
+|---|---|
+| Title | CARERS MEDICATION NOTES |
+| Notes table | DATE / TIME / INITIALS / MEDICATION / DOSE / REASON / RESULT / TIME / INITIALS — 30 blank rows |
+| Branding | AYP Healthcare logo area (bottom right) |
 
 ---
 

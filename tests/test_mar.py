@@ -63,7 +63,10 @@ def test_generate_pdf_no_medications():
 
 def test_generate_pdf_three_medications():
     meds = [
-        Medication(f"Med {i}", "5mg", "Oral", "27/12/2025", "", list(ROUNDS), "")
+        Medication(
+            name=f"Med {i}", dose="5mg", route="Oral",
+            start_date="27/12/2025", rounds=list(ROUNDS),
+        )
         for i in range(1, 4)
     ]
     data = _make_data(medications=meds)
