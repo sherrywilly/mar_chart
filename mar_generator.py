@@ -509,7 +509,7 @@ def generate_pdf(data: MARData) -> bytes:
             ("Right Foot",      0.69, 0.95, 0.12, 0.03),
         ]
 
-        _HIGHLIGHT = colors.HexColor("#FF8C00")
+        _AMBER_HIGHLIGHT = colors.HexColor("#FF8C00")
         _HL_STROKE = colors.HexColor("#CC5500")
         _ZONE_FILL = colors.HexColor("#DDE8F5")
         _ZONE_STROKE = colors.HexColor("#6688AA")
@@ -517,6 +517,7 @@ def generate_pdf(data: MARData) -> bytes:
         _FIG_W = 155    # pt: width of each silhouette figure
         _FIG_H = 265    # pt: height of each silhouette figure
         _GAP   = 22     # pt: horizontal gap between the two figures
+        _ZONE_LABEL_FONT_SIZE = 3.8  # pt: label text inside each zone ellipse
 
         def __init__(self, application_sites):
             super().__init__()
@@ -536,7 +537,7 @@ def generate_pdf(data: MARData) -> bytes:
                 rx = rx_f * fig_w
                 ry = ry_f * fig_h
                 if name in self.sites:
-                    c.setFillColor(self._HIGHLIGHT)
+                    c.setFillColor(self._AMBER_HIGHLIGHT)
                     c.setStrokeColor(self._HL_STROKE)
                     c.setLineWidth(1.2)
                 else:
@@ -546,7 +547,7 @@ def generate_pdf(data: MARData) -> bytes:
                 c.ellipse(cx - rx, cy - ry, cx + rx, cy + ry, fill=1)
                 # zone label
                 c.setFillColor(colors.black)
-                font_sz = 3.8
+                font_sz = self._ZONE_LABEL_FONT_SIZE
                 c.setFont("Helvetica", font_sz)
                 # short abbreviations for narrow zones
                 short = name.replace("Left ", "L.").replace("Right ", "R.")
