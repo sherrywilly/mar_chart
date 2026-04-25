@@ -1,7 +1,7 @@
 """Tests for the AYP Healthcare MAR chart generator."""
 import pytest
 
-from mar_generator import MARData, Medication, ROUNDS, generate_pdf, generate_word
+from mar_generator import MARData, Medication, ROUNDS, generate_pdf, generate_word, BODY_ZONES
 
 
 def _make_data(**overrides) -> MARData:
@@ -35,6 +35,14 @@ SAMPLE_MED = Medication(
     rounds=list(ROUNDS),
     instructions="Two to be taken when required",
     container="Separate container",
+)
+
+TOPICAL_MED = Medication(
+    name="Diprobase Cream 50g",
+    dose="Thin layer",
+    route="Topical",
+    instructions="Apply twice daily",
+    application_sites=["Left Lower Leg", "Right Lower Leg", "Left Foot"],
 )
 
 SAMPLE_DATA = _make_data(medications=[SAMPLE_MED])
@@ -188,3 +196,59 @@ def test_flask_filename_uses_patient_name(client):
         },
     )
     assert b"John_Doe" in resp.headers["Content-Disposition"].encode()
+
+
+# ---- Body Map tests ----
+
+def test_generate_pdf_with_body_map():
+    """PDF with a topical medication and application sites should still be valid PDF."""
+    data = _make_data(medications=[TOPICAL_MED])
+    result = generate_pdf(data)
+    assert result[:4] == b"%PDF"
+    assert len(result) > 0
+
+
+def test_generate_pdf_body_map_no_sites():
+    """A topical medication with no application_sites should not add a body map page."""
+    med = Medication(
+        name="Hydrocortisone 1% cream",
+        dose="Thin layer",
+        route="Topical",
+        application_sites=[],
+    )
+    data = _make_data(medications=[med])
+    result = generate_pdf(data)
+    assert result[:4] == b"%PDF"
+
+
+def test_generate_pdf_body_map_all_zones():
+    """Body map page with every zone highlighted should not raise."""
+    med = Medication(
+        name="Emollient Cream",
+        dose="As required",
+        route="Topical",
+        application_sites=list(BODY_ZONES),
+    )
+    data = _make_data(medications=[med])
+    result = generate_pdf(data)
+    assert result[:4] == b"%PDF"
+
+
+def test_flask_body_map_via_form(client):
+    """Form submission with topical sites should produce a valid PDF."""
+    resp = client.post(
+        "/generate",
+        data={
+            "patient_name": "Jane Smith",
+            "org_name": "AYP Healthcare",
+            "start_date": "01/01/2026",
+            "med_1_name": "Diprobase Cream",
+            "med_1_dose": "Thin layer",
+            "med_1_route": "Topical",
+            "med_1_rounds": "MORNI",
+            "med_1_sites": ["Left Lower Leg", "Right Lower Leg"],
+            "output_format": "pdf",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.data[:4] == b"%PDF"

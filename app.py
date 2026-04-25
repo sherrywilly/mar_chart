@@ -8,7 +8,7 @@ from datetime import date
 
 from flask import Flask, Response, render_template, request
 
-from mar_generator import MARData, Medication, generate_pdf, generate_word, ROUNDS
+from mar_generator import MARData, Medication, generate_pdf, generate_word, ROUNDS, BODY_ZONES
 
 app = Flask(__name__)
 
@@ -51,6 +51,7 @@ def generate():
         if not name:
             continue
         rounds = form.getlist(f"med_{i}_rounds")
+        sites  = form.getlist(f"med_{i}_sites")
         med = Medication(
             name=name,
             dose=form.get(f"med_{i}_dose", "").strip(),
@@ -59,6 +60,7 @@ def generate():
             rounds=rounds if rounds else list(ROUNDS),
             instructions=form.get(f"med_{i}_instructions", "").strip(),
             container=form.get(f"med_{i}_container", "").strip(),
+            application_sites=[s for s in sites if s in BODY_ZONES],
         )
         medications.append(med)
 

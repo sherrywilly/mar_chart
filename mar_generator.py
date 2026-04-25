@@ -25,6 +25,20 @@ DAY_ABBRS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 # Data classes
 # ---------------------------------------------------------------------------
 
+# All body zones that can be highlighted on the body map
+BODY_ZONES = [
+    "Head", "Neck",
+    "Left Shoulder", "Right Shoulder",
+    "Chest", "Abdomen", "Back",
+    "Left Arm", "Right Arm",
+    "Left Hand", "Right Hand",
+    "Left Hip", "Right Hip",
+    "Left Thigh", "Right Thigh",
+    "Left Lower Leg", "Right Lower Leg",
+    "Left Foot", "Right Foot",
+]
+
+
 @dataclass
 class Medication:
     name: str
@@ -33,7 +47,8 @@ class Medication:
     end_date: str = ""
     rounds: List[str] = field(default_factory=lambda: list(ROUNDS))
     instructions: str = ""
-    container: str = ""       # e.g. "Separate container"
+    container: str = ""              # e.g. "Separate container"
+    application_sites: List[str] = field(default_factory=list)  # body-map zones
 
 
 @dataclass
@@ -105,7 +120,7 @@ def generate_pdf(data: MARData) -> bytes:
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
     from reportlab.platypus import (
-        PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+        Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
     )
 
     buf = io.BytesIO()
@@ -445,6 +460,234 @@ def generate_pdf(data: MARData) -> bytes:
         return els
 
     # ================================================================
+    # Body Map diagram – custom Flowable
+    # Draws FRONT and BACK human silhouettes side-by-side.
+    # Zones listed in application_sites are filled with amber highlight.
+    # ================================================================
+    class _BodyMapDiagram(Flowable):
+        """Two-view (front / back) body diagram with highlighted application zones."""
+
+        # Zone tuples: (name, cx_frac, cy_frac, rx_frac, ry_frac)
+        # cx/cy fractions are measured from the top-left of the figure box.
+        _FRONT = [
+            ("Head",            0.50, 0.07, 0.17, 0.07),
+            ("Neck",            0.50, 0.16, 0.08, 0.025),
+            ("Left Shoulder",   0.28, 0.22, 0.13, 0.05),
+            ("Right Shoulder",  0.72, 0.22, 0.13, 0.05),
+            ("Chest",           0.50, 0.32, 0.20, 0.08),
+            ("Abdomen",         0.50, 0.46, 0.20, 0.08),
+            ("Left Arm",        0.18, 0.37, 0.07, 0.12),
+            ("Right Arm",       0.82, 0.37, 0.07, 0.12),
+            ("Left Hand",       0.12, 0.56, 0.07, 0.04),
+            ("Right Hand",      0.88, 0.56, 0.07, 0.04),
+            ("Left Hip",        0.35, 0.58, 0.12, 0.05),
+            ("Right Hip",       0.65, 0.58, 0.12, 0.05),
+            ("Left Thigh",      0.34, 0.70, 0.10, 0.08),
+            ("Right Thigh",     0.66, 0.70, 0.10, 0.08),
+            ("Left Lower Leg",  0.34, 0.84, 0.09, 0.08),
+            ("Right Lower Leg", 0.66, 0.84, 0.09, 0.08),
+            ("Left Foot",       0.31, 0.95, 0.12, 0.03),
+            ("Right Foot",      0.69, 0.95, 0.12, 0.03),
+        ]
+        _BACK = [
+            ("Head",            0.50, 0.07, 0.17, 0.07),
+            ("Neck",            0.50, 0.16, 0.08, 0.025),
+            ("Left Shoulder",   0.28, 0.22, 0.13, 0.05),
+            ("Right Shoulder",  0.72, 0.22, 0.13, 0.05),
+            ("Back",            0.50, 0.39, 0.20, 0.14),
+            ("Left Arm",        0.18, 0.37, 0.07, 0.12),
+            ("Right Arm",       0.82, 0.37, 0.07, 0.12),
+            ("Left Hand",       0.12, 0.56, 0.07, 0.04),
+            ("Right Hand",      0.88, 0.56, 0.07, 0.04),
+            ("Left Hip",        0.35, 0.58, 0.12, 0.05),
+            ("Right Hip",       0.65, 0.58, 0.12, 0.05),
+            ("Left Thigh",      0.34, 0.70, 0.10, 0.08),
+            ("Right Thigh",     0.66, 0.70, 0.10, 0.08),
+            ("Left Lower Leg",  0.34, 0.84, 0.09, 0.08),
+            ("Right Lower Leg", 0.66, 0.84, 0.09, 0.08),
+            ("Left Foot",       0.31, 0.95, 0.12, 0.03),
+            ("Right Foot",      0.69, 0.95, 0.12, 0.03),
+        ]
+
+        _HIGHLIGHT = colors.HexColor("#FF8C00")
+        _HL_STROKE = colors.HexColor("#CC5500")
+        _ZONE_FILL = colors.HexColor("#DDE8F5")
+        _ZONE_STROKE = colors.HexColor("#6688AA")
+        _LBL_H = 14     # pt: space above each figure for the FRONT / BACK label
+        _FIG_W = 155    # pt: width of each silhouette figure
+        _FIG_H = 265    # pt: height of each silhouette figure
+        _GAP   = 22     # pt: horizontal gap between the two figures
+
+        def __init__(self, application_sites):
+            super().__init__()
+            self.sites = set(application_sites)
+            self.width  = 2 * self._FIG_W + self._GAP
+            self.height = self._LBL_H + self._FIG_H
+
+        def _draw_figure(self, c, ox, oy_base, zones):
+            """Draw one silhouette (front or back) at canvas offset (ox, oy_base).
+            oy_base is the bottom of the figure area (ReportLab y is bottom-up)."""
+            fig_h = self._FIG_H
+            fig_w = self._FIG_W
+            for (name, cx_f, cy_f, rx_f, ry_f) in zones:
+                cx = ox + cx_f * fig_w
+                # Convert top-down cy_frac → bottom-up canvas y
+                cy = oy_base + fig_h * (1.0 - cy_f)
+                rx = rx_f * fig_w
+                ry = ry_f * fig_h
+                if name in self.sites:
+                    c.setFillColor(self._HIGHLIGHT)
+                    c.setStrokeColor(self._HL_STROKE)
+                    c.setLineWidth(1.2)
+                else:
+                    c.setFillColor(self._ZONE_FILL)
+                    c.setStrokeColor(self._ZONE_STROKE)
+                    c.setLineWidth(0.5)
+                c.ellipse(cx - rx, cy - ry, cx + rx, cy + ry, fill=1)
+                # zone label
+                c.setFillColor(colors.black)
+                font_sz = 3.8
+                c.setFont("Helvetica", font_sz)
+                # short abbreviations for narrow zones
+                short = name.replace("Left ", "L.").replace("Right ", "R.")
+                c.drawCentredString(cx, cy - font_sz * 0.45, short)
+
+        def draw(self):
+            c = self.canv
+            fig_y_base = 0       # bottom of figure area
+            label_y    = self._FIG_H + self._LBL_H * 0.3
+
+            for idx, (view_label, zones) in enumerate(
+                [("FRONT VIEW", self._FRONT), ("BACK VIEW", self._BACK)]
+            ):
+                ox = idx * (self._FIG_W + self._GAP)
+                # View label centred above figure
+                c.setFont("Helvetica-Bold", 7)
+                c.setFillColor(colors.HexColor("#2C5F8A"))
+                c.drawCentredString(ox + self._FIG_W / 2, label_y, view_label)
+                # Draw outer bounding box for the figure
+                c.setStrokeColor(colors.HexColor("#AABBCC"))
+                c.setLineWidth(0.4)
+                c.rect(ox, fig_y_base, self._FIG_W, self._FIG_H, fill=0)
+                self._draw_figure(c, ox, fig_y_base, zones)
+
+    # ================================================================
+    # Body Map eMAR page  – completely separate page per topical med
+    # ================================================================
+    def _build_body_map_page(med: Medication) -> list:
+        els: list = []
+
+        # ---- Page title ----
+        els.append(p(
+            f"<b>BODY MAP – TOPICAL CREAM APPLICATION RECORD</b>",
+            sty("bm_ttl", 11, bold=True, align=1),
+        ))
+        els.append(Spacer(1, 3 * mm))
+
+        # ---- Patient + medication mini-header ----
+        hdr_style = TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 0.75, colors.black),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.5,  colors.black),
+            ("BACKGROUND",    (0, 0), (-1, -1), colors.HexColor("#DDE8F5")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+        ])
+        mini_hdr_data = [[
+            p(f"<b>Patient:</b> {data.patient_name}", t7b),
+            p(f"<b>DOB:</b> {data.patient_dob}", t7b),
+            p(f"<b>NHS No:</b> {data.nhs_number}", t7b),
+            p(f"<b>Room:</b> {data.room}", t7b),
+        ], [
+            p(f"<b>Medication:</b> {med.name}", t7b),
+            p(f"<b>Dose:</b> {med.dose}", t7b),
+            p(f"<b>Route:</b> {med.route}", t7b),
+            p(f"<b>Doctor:</b> {data.doctor}", t7b),
+        ]]
+        w_each = usable_w / 4
+        mini_hdr = Table(mini_hdr_data, colWidths=[w_each] * 4, style=hdr_style)
+        els.append(mini_hdr)
+        els.append(Spacer(1, 3 * mm))
+
+        # ---- Middle: diagram (left) + highlighted zones legend (right) ----
+        diagram = _BodyMapDiagram(med.application_sites)
+
+        # Legend: list of all zones, highlighted ones shown in amber
+        legend_rows = []
+        legend_title_style = sty("bm_leg_ttl", 7, bold=True)
+        legend_rows.append([p("<b>Application Site(s)</b>", legend_title_style)])
+        for zone in BODY_ZONES:
+            if zone in med.application_sites:
+                zone_sty = sty(f"bm_z_hl_{zone}", 7, bold=True)
+                txt = f'<font color="#CC5500">● {zone}</font>'
+            else:
+                zone_sty = sty(f"bm_z_{zone}", 7)
+                txt = f'<font color="#888888">○ {zone}</font>'
+            legend_rows.append([p(txt, zone_sty)])
+
+        if med.instructions:
+            legend_rows.append([p("", t7)])
+            legend_rows.append([p(f"<b>Instructions:</b>", t7b)])
+            legend_rows.append([p(med.instructions, t7)])
+
+        legend_tbl = Table(legend_rows, colWidths=[usable_w - diagram.width - 8 * mm])
+        legend_tbl.setStyle(TableStyle([
+            ("TOPPADDING",    (0, 0), (-1, -1), 1),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 1),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 4),
+            ("LINEBELOW",     (0, 0), (-1, 0),  0.75, colors.HexColor("#2C5F8A")),
+        ]))
+
+        mid_tbl = Table(
+            [[diagram, Spacer(8 * mm, 1), legend_tbl]],
+            colWidths=[diagram.width, 8 * mm, usable_w - diagram.width - 8 * mm],
+        )
+        mid_tbl.setStyle(TableStyle([
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+        ]))
+        els.append(mid_tbl)
+        els.append(Spacer(1, 4 * mm))
+
+        # ---- eMAR log table ----
+        els.append(p("<b>ADMINISTRATION LOG</b>", sty("bm_log_ttl", 8, bold=True)))
+        els.append(Spacer(1, 2 * mm))
+
+        log_cols = ["DATE", "TIME", "SITE(S) APPLIED", "SKIN CONDITION",
+                    "AMOUNT APPLIED", "CARER INITIALS", "SIGNATURE"]
+        log_ratios = [0.10, 0.08, 0.22, 0.18, 0.14, 0.13, 0.15]
+        s = sum(log_ratios)
+        log_cws = [usable_w * r / s for r in log_ratios]
+
+        log_hdr = [p(h, sty(f"bm_lh_{h}", 7, bold=True, align=1)) for h in log_cols]
+        log_rows = [log_hdr] + [[""] * len(log_cols) for _ in range(22)]
+
+        log_tbl = Table(log_rows, colWidths=log_cws)
+        log_tbl.setStyle(TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 0.75, colors.black),
+            ("INNERGRID",     (0, 0), (-1, -1), 0.4,  colors.black),
+            ("BACKGROUND",    (0, 0), (-1, 0),  colors.HexColor("#DDE8F5")),
+            ("LINEBELOW",     (0, 0), (-1, 0),  1.2,  colors.black),
+            ("ALIGN",         (0, 0), (-1, 0),  "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 2),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 2),
+        ]))
+        els.append(log_tbl)
+        els.append(Spacer(1, 4 * mm))
+        els.append(p(f"<b>AYP</b> {data.org_name}",
+                     sty("bm_brand", 9, bold=False, align=2)))
+        return els
+
+    # ================================================================
     # Assemble story
     # ================================================================
     legend = (
@@ -469,6 +712,12 @@ def generate_pdf(data: MARData) -> bytes:
     # --- Back page: Carers Medication Notes ---
     story.append(PageBreak())
     story.extend(_build_back_page())
+
+    # --- Body Map pages: one separate page per medication with application sites ---
+    for med in data.medications:
+        if med.application_sites:
+            story.append(PageBreak())
+            story.extend(_build_body_map_page(med))
 
     doc.build(story)
     return buf.getvalue()

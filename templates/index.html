@@ -200,13 +200,68 @@
       margin-top: 12px;
     }
 
+    /* Application sites panel (topical body map) */
+    .sites-panel {
+      display: none;
+      margin-top: 14px;
+      border: 1.5px solid #f39c12;
+      border-radius: 8px;
+      padding: 14px 18px;
+      background: #fffbf0;
+    }
+    .sites-panel.visible { display: block; }
+    .sites-panel-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #b8730a;
+      margin-bottom: 10px;
+    }
+    .sites-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 7px;
+    }
+    .sites-grid label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: #555;
+      cursor: pointer;
+      border: 1.5px solid #e6c87a;
+      border-radius: 6px;
+      padding: 5px 10px;
+      background: #fff;
+      transition: all 0.15s;
+    }
+    .sites-grid label:has(input:checked) {
+      border-color: #d4870a;
+      background: #fff3d6;
+      color: #7a4900;
+    }
+    .sites-grid input[type=checkbox] {
+      width: 14px; height: 14px;
+      accent-color: #d4870a;
+      cursor: pointer;
+    }
+    .select-all-btn {
+      background: none;
+      border: 1px solid #d4870a;
+      color: #d4870a;
+      border-radius: 5px;
+      padding: 3px 10px;
+      font-size: 0.77rem;
+      cursor: pointer;
+      margin-right: 6px;
+    }
+    .select-all-btn:hover { background: #fff3d6; }
     footer {
       text-align: center;
       font-size: 0.78rem;
       color: #999;
       margin-top: 8px;
     }
-  </style>
 </head>
 <body>
 
@@ -371,6 +426,33 @@
             {% endfor %}
           </div>
         </div>
+
+        <!-- Body Map site selector – shown when route is Topical -->
+        <div class="sites-panel" id="sites_panel_{{ i }}">
+          <div class="sites-panel-title">
+            🗺️ Body Map – Application Site(s)
+            <small style="font-weight:400;color:#888;font-size:0.77rem">
+              (tick all zones where the cream is applied – a highlighted body map page will be added to the PDF)
+            </small>
+          </div>
+          <div style="margin-bottom:8px">
+            <button type="button" class="select-all-btn"
+                    onclick="toggleAll('med_{{ i }}_sites', true)">Select All</button>
+            <button type="button" class="select-all-btn"
+                    onclick="toggleAll('med_{{ i }}_sites', false)">Clear All</button>
+          </div>
+          <div class="sites-grid">
+            {% for zone in ['Head','Neck','Left Shoulder','Right Shoulder','Chest','Abdomen','Back',
+                            'Left Arm','Right Arm','Left Hand','Right Hand',
+                            'Left Hip','Right Hip','Left Thigh','Right Thigh',
+                            'Left Lower Leg','Right Lower Leg','Left Foot','Right Foot'] %}
+            <label>
+              <input type="checkbox" name="med_{{ i }}_sites" value="{{ zone }}" />
+              {{ zone }}
+            </label>
+            {% endfor %}
+          </div>
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -426,5 +508,34 @@
   </footer>
 </main>
 
+<script>
+  const TOPICAL_ROUTES = ["Topical", "Transdermal (patch)"];
+
+  function isTopical(value) {
+    return TOPICAL_ROUTES.some(r => value.toLowerCase().includes(r.toLowerCase()));
+  }
+
+  function updateSitesPanel(i) {
+    const routeInput = document.querySelector(`[name="med_${i}_route"]`);
+    const panel = document.getElementById(`sites_panel_${i}`);
+    if (!routeInput || !panel) return;
+    panel.classList.toggle("visible", isTopical(routeInput.value));
+  }
+
+  function toggleAll(name, state) {
+    document.querySelectorAll(`input[name="${name}"]`).forEach(cb => cb.checked = state);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    [1, 2, 3].forEach(i => {
+      const routeInput = document.querySelector(`[name="med_${i}_route"]`);
+      if (routeInput) {
+        routeInput.addEventListener("input", () => updateSitesPanel(i));
+        routeInput.addEventListener("change", () => updateSitesPanel(i));
+        updateSitesPanel(i);
+      }
+    });
+  });
+</script>
 </body>
 </html>
